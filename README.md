@@ -1,5 +1,7 @@
 # mtanvil
 
+<img alt="GitHub License" src="https://img.shields.io/github/license/fancyfinn9/mtanvil?color=darkgreen"> <a href="https://pypi.org/project/mtanvil/" target="_blank"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/mtanvil?logo=python&logoColor=white&color=blue"></a>
+
 A Python library for parsing and editing Luanti worlds.
 
 The name comes from Luanti’s former name (‘MT’ for Minetest) and the Minecraft world parsing library ‘anvil’
@@ -12,9 +14,13 @@ mtanvil fully supports MapBlock format version 29 (latest). Other versions may n
 
 It is recommended that you familiarize yourself with the [Map File Format and MapBlock Serialization Format](https://github.com/luanti-org/luanti/blob/master/doc/world_format.md#map-file-format) so that you fully understand what data mtanvil provides.
 
-## Usage
+## Installation
 
-> Currently mtanvil is not available as a package (yet), so you must download **mtanvil.py** and put it in the same directory as the file that will import it.
+Install mtanvil by running:
+
+`pip install mtanvil`
+
+## Usage
 
 First of all, import mtanvil with
 
