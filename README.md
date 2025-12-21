@@ -22,32 +22,34 @@ First of all, import mtanvil with
 
 You can then load a world file:
 
-`world = anvil.world_from_file('/path/to/world/file/map.sqlite')`
+`world = anvil.World.from_file('/path/to/map.sqlite')`
 
-### What to do with a world
+### World functions
 
-* `list_mapblocks(world)`: Returns a list of all MapBlocks present in the world file
+* `world.list_mapblocks()`: Returns a list of all MapBlocks present in the world file
 
-* `get_mapblock(world, pos)`: Returns the data of a MapBlock. `pos` should be a tuple of the XYZ coords, eg (5, -4, 18)
+* `world.get_mapblock(pos)`: Returns a MapBlock. `pos` should be a tuple of the XYZ coords, eg (5, -4, 18)
 
-* `set_mapblock(world, pos, data)`: Sets the data of a MapBlock. `data` should be serialized and compressed, see data functions below
+* `world.set_mapblock(pos, data)`: Writes a MapBlock to the world. `data` should be serialized, see MapBlock's functions
 
 > NOTE: you should ensure that the world is currently not in use by Luanti before writing to it
 
-* `get_all_mapblocks(world)`: Returns a list of the data of all MapBlocks present in the world file. Each list item is a tuple: (X, Y, Z, data)
+* `world.get_all_mapblocks()`: Returns all MapBlocks present in the world file. Each list item is a tuple: (X, Y, Z, MapBlock)
 
-### What to do with data
+* `world.close()`: Closes the database connection. It is recommended to run this once you're finished with the World
 
-* `parse_mapblock_data(data)`: Returns a dictionary of the parsed data. This "parsed data" is required for nearly every function below
+### MapBlock functions
 
-* `set_node(data, pos, param0, param1=0, param2=0)`: Sets the node at the specified co-ordinates. `param0` is the node name, eg `default:goldblock`. Make sure you are providing the correct MapBlock, see utility functions below
+* `mapblock.data`: Dictionary of the parsed data
 
-* `serialize_mapblock_data(data)`: Turns parsed data back into binary. This must still be compressed before writing to a MapBlock, see functions below
+* `mapblock.parse(data)`: Returns a dictionary of the parsed data. `data` must be a raw binary blob from the database
+
+* `mapblock.set_node(pos, param0, param1 = 0, param2 = 0)`: Sets the node at the specified co-ordinates. `param0` is the node name, eg `default:goldblock`
+
+* `mapblock.serialize(data = None, compressed = True)`: Turns dictionary of parsed data back into binary. If `data` is `None`, `mapblock.data` will be serialized instead. `compressed` is required for Luanti MapBlock format version 29+
 
 ### Utility functions
 
-* `compress_mapblock_data(data)`: Compresses serialized data with zstd, as per the MapBlock format version 29 specifications
-
-* `pos_get_mapblock(pos)`: Returns a tuplet with the MapBlock that has the world co-ordinates provided
+* `pos_get_mapblock(pos)`: Returns a tuplet with the position of the MapBlock that has the world co-ordinates provided
 
 * `pos_get_node(pos)`: Returns a tuplet with the position within the relevant MapBlock (see function above) of the world co-ordinates provided

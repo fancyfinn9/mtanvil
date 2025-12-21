@@ -40,7 +40,10 @@ class MapBlock:
         self.raw = data
         self.data = self.parse(data)
         
-    def parse(self, data=self.data):
+    def parse(self, data=None):
+        if data is None:
+            data = self.raw
+        
         parsed_data = {
             "was_compressed": None,
             "version": None, "flags": None, "lighting_complete": None, "timestamp": None,
@@ -53,7 +56,9 @@ class MapBlock:
 
         parsed_data["version"], data = pop_bytes(data, 1)
 
-        if struct.unpack(">B", parsed_data["version"])[0] >= 29: # Map format version 29+ compresses the entire MapBlock data (excluding the version byte) with zstd
+        version = struct.unpack(">B", parsed_data["version"])[0]
+
+        if version >= 29: # Map format version 29+ compresses the entire MapBlock data (excluding the version byte) with zstd
             try:
                 data = zstd_decompress(data)
                 parsed_data["was_compressed"] = True
@@ -64,10 +69,10 @@ class MapBlock:
         
         parsed_data["flags"], data = pop_bytes(data, 1)
 
-        if struct.unpack(">B", parsed_data["version"])[0] >= 27:
+        if version >= 27:
             parsed_data["lighting_complete"], data = pop_bytes(data, 2)
 
-        if struct.unpack(">B", parsed_data["version"])[0] >= 29:
+        if version >= 29:
             parsed_data["timestamp"], data = pop_bytes(data, 4)
 
             parsed_data["name_id_mapping_version"], data = pop_bytes(data, 1) # Should be 0 (map format version 29 (current))
@@ -92,9 +97,9 @@ class MapBlock:
                 parsed_data["name_id_mappings"] = mappings
         
         parsed_data["content_width"], data = pop_bytes(data, 1) # Should be 2 (map format version 24+) or 1
-        if struct.unpack(">B", parsed_data["version"])[0] < 24 and struct.unpack(">B", parsed_data["content_width"])[0] != 1:
+        if version < 24 and struct.unpack(">B", parsed_data["content_width"])[0] != 1:
             print("WARNING: content_width is not 1")
-        elif struct.unpack(">B", parsed_data["version"])[0] >= 24 and struct.unpack(">B", parsed_data["content_width"])[0] != 2:
+        elif version >= 24 and struct.unpack(">B", parsed_data["content_width"])[0] != 2:
             print("WARNING: content_width is not 2")
 
         parsed_data["params_width"], data = pop_bytes(data, 1) # Should be 2
@@ -126,7 +131,7 @@ class MapBlock:
             node_data.append(node)
         parsed_data["node_data"] = node_data
 
-        if struct.unpack(">B", parsed_data["version"])[0] < 23:
+        if version < 23:
             parsed_data["node_metadata_version"], data = pop_bytes(data, 2)
             if struct.unpack(">H", parsed_data["node_metadata_version"])[0] != 1:
                 print("WARNING: node_metadata_version is not 1")
@@ -151,13 +156,13 @@ class MapBlock:
 
             parsed_data["node_metadata"] = all_metadata
 
-        elif struct.unpack(">B", parsed_data["version"])[0] >= 23:
+        elif version >= 23:
             parsed_data["node_metadata_version"], data = pop_bytes(data, 1)
             if struct.unpack(">B", parsed_data["node_metadata_version"])[0] == 0:
                 print("WARNING: node_metadata_version is 0, skipping node metadata")
-            elif struct.unpack(">B", parsed_data["version"])[0] < 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 1:
+            elif version < 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 1:
                 print("WARNING: node_metadata_version is not 1")
-            elif struct.unpack(">B", parsed_data["version"])[0] >= 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 2:
+            elif version >= 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 2:
                 print("WARNING: node_metadata_version is not 2")
 
             if struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 0: 
@@ -236,7 +241,7 @@ class MapBlock:
 
         # Timestamp + Name ID Mappings (map format version >29)
 
-        if struct.unpack(">B", parsed_data["version"])[0] < 29:
+        if version < 29:
             parsed_data["timestamp"], data = pop_bytes(data, 4)
 
             parsed_data["name_id_mapping_version"], data = pop_bytes(data, 1) # Should be 0
@@ -262,7 +267,7 @@ class MapBlock:
 
         # Node Timers (map format version 25+)
 
-        if struct.unpack(">B", parsed_data["version"])[0] >= 25:
+        if version >= 25:
             parsed_data["length_of_single_timer"], data = pop_bytes(data, 1) # Should be 10 (2+4+4)
             if struct.unpack(">B", parsed_data["length_of_single_timer"])[0] != 10:
                 print("WARNING: length_of_single_timer is not 10")
@@ -286,8 +291,9 @@ class MapBlock:
 
         return parsed_data
 
-    def serialize(self, compressed=True):
-        data = self.data
+    def serialize(self, data=None, compressed=True):
+        if data == None:
+            data = self.data
 
         serialized_data = bytearray()
 
@@ -397,7 +403,7 @@ class MapBlock:
                                 serialized_data.extend(var["value"])
 
                                 # u8 is_private
-                                if struct.unpack(">B", var["is_private"]) == 1:
+                                if struct.unpack(">B", var["is_private"])[0] == 1:
                                     serialized_data.extend(struct.pack(">B", 1))
                                 else:
                                     serialized_data.extend(struct.pack(">B", 0))
@@ -485,9 +491,10 @@ class MapBlock:
 
         mapping_id = None
         
-        for mapping in data["name_id_mappings"]:
-            if mapping["name"].decode("utf-8") == param0:
-                mapping_id = mapping["id"]
+        if isinstance(data["name_id_mappings"], list):
+            for mapping in data["name_id_mappings"]:
+                if mapping["name"].decode("utf-8") == param0:
+                    mapping_id = mapping["id"]
 
         if not mapping_id:
             used_ids = []
@@ -513,18 +520,28 @@ class World:
         self.conn = conn
         self.filename = "<unknown>"
 
-    def __str__(self):
-        return "Luanti World at "+se.f.filename
+    def close(self):
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
 
     @classmethod
     def from_file(cls, filename):
         conn = sqlite3.connect(filename)
-        self.filename = filename
-        return cls(conn)
+        instance = cls(conn)
+        instance.filename = filename
+        return instance
 
     def list_mapblocks(self):
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM blocks")
+        cursor.execute("SELECT x, y, z FROM blocks")
         rows = cursor.fetchall()
 
         mapblocks = []
@@ -555,6 +572,6 @@ class World:
     def get_all_mapblocks(self):
         mapblocks = []
         for mapblock in self.list_mapblocks():
-            mapblocks.append((mapblock[0], mapblock[1], mapblock[2], self.get_mapblock(world, mapblock)))
+            mapblocks.append((mapblock[0], mapblock[1], mapblock[2], self.get_mapblock(mapblock)))
 
         return mapblocks

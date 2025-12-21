@@ -1,11 +1,11 @@
-# This example opens "decompilingworld", parses the MapBlock that contains node 0,0,0, sets it to a gold block, and writes it
+# This example opens a world, loads the MapBlock that contains node 0,0,0, sets it to a gold block, and writes it
 
 import mtanvil as anvil
 
-world = anvil.world_from_file('/home/USERNAME/luanti/worlds/decompilingworld/map.sqlite')
+world = anvil.World.from_file('/path/to/map.sqlite')
 
-data = anvil.parse_mapblock_data(anvil.get_mapblock(world, (0,0,0)))
+mapblock = world.get_mapblock((0,0,0))
 
-anvil.set_node(data, (0,0,0), "default:goldblock")
+mapblock.set_node((0,0,0), "default:goldblock").set_node((0,1,0), "default:goldblock") # It chains!
 
-anvil.set_mapblock(world, (0,0,0), anvil.compress_mapblock_data(anvil.serialize_mapblock_data(data)))
+world.set_mapblock((0,0,0), mapblock.serialize())
