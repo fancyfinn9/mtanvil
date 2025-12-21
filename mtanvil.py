@@ -4,9 +4,51 @@ import zlib
 import struct
 import io
 
-def world_from_file(file):
-    conn = sqlite3.connect(file)
-    return conn
+class World:
+    def __init__(self, conn):
+        self.conn = conn
+
+    @classmethod
+    def from_file(cls, filename):
+        conn = sqlite3.connect(filename)
+        return cls(conn)
+
+    def list_mapblocks(self):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM blocks")
+        rows = cursor.fetchall()
+
+        mapblocks = []
+        for row in rows:
+            mapblocks.append((row[0], row[1], row[2]))
+
+        return mapblocks
+
+    def get_mapblock(self, mapblock):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT data FROM blocks WHERE x=? AND y=? AND z=?",
+            (mapblock[0], mapblock[1], mapblock[2])
+        )
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        return None
+
+    def set_mapblock(self, pos, blob):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE blocks SET data=? WHERE x=? AND y=? AND z=?",
+            (sqlite3.Binary(blob), pos[0], pos[1], pos[2])
+        )
+        self.conn.commit()
+
+    def get_all_mapblocks(self):
+        mapblocks = []
+        for mapblock in self.list_mapblocks():
+            mapblocks.append((mapblock[0], mapblock[1], mapblock[2], self.get_mapblock(world, mapblock)))
+
+        return mapblocks
 
 def pop_bytes(data, n):
     if len(data) < n:
@@ -27,7 +69,6 @@ def zstd_compress(data):
 def compress_mapblock_data(data):
     return data[:1] + zstd_compress(data[1:])
     
-
 def parse_mapblock_data(data):
     parsed_data = {
         "was_compressed": None,
@@ -456,43 +497,6 @@ def serialize_mapblock_data(data):
         serialized_data.extend(struct.pack(">H", 0))
 
     return bytes(serialized_data)
-
-def list_mapblocks(world):
-    cursor = world.cursor()
-    cursor.execute(f"SELECT * FROM blocks")
-    rows = cursor.fetchall()
-
-    mapblocks = []
-    for row in rows:
-        mapblocks.append((row[0], row[1], row[2]))
-
-    return mapblocks
-
-def get_mapblock(world, mapblock):
-    cursor = world.cursor()
-    cursor.execute(
-        "SELECT data FROM blocks WHERE x=? AND y=? AND z=?",
-        (mapblock[0], mapblock[1], mapblock[2])
-    )
-    row = cursor.fetchone()
-    if row:
-        return row[0]
-    return None
-
-def set_mapblock(world, pos, blob):
-    cursor = world.cursor()
-    cursor.execute(
-        "UPDATE blocks SET data=? WHERE x=? AND y=? AND z=?",
-        (sqlite3.Binary(blob), pos[0], pos[1], pos[2])
-    )
-    world.commit()
-
-def get_all_mapblocks(world):
-    mapblocks = []
-    for mapblock in list_mapblocks(world):
-        mapblocks.append((mapblock[0], mapblock[1], mapblock[2], get_mapblock(world, mapblock)))
-
-    return mapblocks
 
 def pos_get_mapblock(pos):
     return (
