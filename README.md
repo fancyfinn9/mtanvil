@@ -14,6 +14,8 @@ It is recommended that you familiarize yourself with the [Map File Format and Ma
 
 ## Usage
 
+> Currently mtanvil is not available as a package (yet), so you must download **mtanvil.py** and put it in the same directory as the file that will import it.
+
 First of all, import mtanvil with
 
 `import mtanvil as anvil`
@@ -29,6 +31,8 @@ You can then load a world file:
 * `get_mapblock(world, pos)`: Returns the data of a MapBlock. `pos` should be a tuple of the XYZ coords, eg (5, -4, 18)
 
 * `set_mapblock(world, pos, data)`: Sets the data of a MapBlock. `data` should be serialized and compressed, see data functions below
+
+> NOTE: you should ensure that the world is currently not in use by Luanti before writing to it
 
 * `get_all_mapblocks(world)`: Returns a list of the data of all MapBlocks present in the world file. Each list item is a tuple: (X, Y, Z, data)
 

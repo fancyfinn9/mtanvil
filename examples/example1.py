@@ -1,3 +1,5 @@
+# This example opens "decompilingworld", parses the MapBlock that contains node 0,0,0, sets it to a gold block, and writes it
+
 import mtanvil as anvil
 
 world = anvil.world_from_file('/home/USERNAME/luanti/worlds/decompilingworld/map.sqlite')
