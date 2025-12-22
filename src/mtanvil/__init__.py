@@ -20,6 +20,29 @@ def zstd_compress(data):
     data = compressor.compress(data)
     return data
 
+type_to_format = {
+    "u8": ">B",
+    "s8": ">b",
+    "u16": ">H",
+    "s16": ">h",
+    "u32": ">I",
+    "s32": ">i",
+    "u64": ">Q",
+    "s64": ">q",
+    "f32": ">f",
+    "f64": ">d"
+}
+
+def unpack(type_name, data):
+    if not type_name in type_to_format:
+        raise ValueError("Invalid format")
+    return struct.unpack(integer_to_format[type_name], data)[0]
+
+def pack(type_name, data):
+    if not type_name in type_to_format:
+        raise ValueError("Invalid format")
+    return struct.pack(integer_to_format[type_name], data)
+
 def pos_get_mapblock(pos):
     return (
         pos[0] // 16,
@@ -55,8 +78,7 @@ class MapBlock:
         }
 
         parsed_data["version"], data = pop_bytes(data, 1)
-
-        version = struct.unpack(">B", parsed_data["version"])[0]
+        version = unpack("u8", parsed_data["version"])
 
         if version >= 29: # Map format version 29+ compresses the entire MapBlock data (excluding the version byte) with zstd
             try:
@@ -218,15 +240,15 @@ class MapBlock:
 
         static_objects = []
         for _ in range(struct.unpack(">H", parsed_data["static_object_count"])[0]):
-            static_object = {"type": None, "pos_x_nodes": None, "pos_y_nodes": None, "pos_z_nodes": None, "data_size": None, "data": None}
+            static_object = {"type": None, "pos_x": None, "pos_y": None, "pos_z": None, "data_size": None, "data": None}
 
             static_object["type"], data = pop_bytes(data, 1)
 
-            static_object["pos_x_nodes"], data = pop_bytes(data, 4)
+            static_object["pos_x"], data = pop_bytes(data, 4)
 
-            static_object["pos_y_nodes"], data = pop_bytes(data, 4)
+            static_object["pos_y"], data = pop_bytes(data, 4)
 
-            static_object["pos_z_nodes"], data = pop_bytes(data, 4)
+            static_object["pos_z"], data = pop_bytes(data, 4)
 
             static_object["data_size"], data = pop_bytes(data, 2)
 
@@ -289,7 +311,99 @@ class MapBlock:
             if len(timers) > 0:
                 parsed_data["timers"] = timers
 
-        return parsed_data
+        pretty_data = {
+            "was_compressed": None,
+            "version": None, "flags": {"is_underground": None, "day_night_differs": None, "lighting_expired": None, "generated": None},
+            "lighting_complete": {"nothing1": None, "nothing2": None, "nothing3": None, "nothing4": None,
+                "night": {"X-": None, "Y-": None, "Z-": None, "Z+": None, "Y+": None, "X+": None},
+                "day": {"X-": None, "Y-": None, "Z-": None, "Z+": None, "Y+": None, "X+": None}},
+            "timestamp": None,
+            "name_id_mapping_version": None, "name_id_mappings": [],
+            "content_width": None, "params_width": None, "node_data": [],
+            "node_metadata_version": None, "node_metadata": [],
+            "static_object_version": None, "static_objects": [],
+            "length_of_single_timer": None, "timers": []
+        }
+
+        pretty_data["was_compressed"] = parsed_data["was_compressed"]
+        pretty_data["version"] = version
+
+        pretty_data["flags"]["is_underground"] = bool(parsed_data["flags"] & 0x01)
+        pretty_data["flags"]["day_night_differs"] = bool(parsed_data["flags"] & 0x02)
+        pretty_data["flags"]["lighting_expired"] = bool(parsed_data["flags"] & 0x04)
+        pretty_data["flags"]["generated"] = bool(parsed_data["flags"] & 0x08)
+
+        # TODO: find a way to do this with less code: bool(parsed_data["lighting_complete"] & (1 << X)) is used every time
+
+        pretty_data["lighting_complete"]["nothing1"] = bool(parsed_data["lighting_complete"] & (1 << 15))
+        pretty_data["lighting_complete"]["nothing2"] = bool(parsed_data["lighting_complete"] & (1 << 14))
+        pretty_data["lighting_complete"]["nothing3"] = bool(parsed_data["lighting_complete"] & (1 << 13))
+        pretty_data["lighting_complete"]["nothing4"] = bool(parsed_data["lighting_complete"] & (1 << 12))
+        pretty_data["lighting_complete"]["night"]["X-"] = bool(parsed_data["lighting_complete"] & (1 << 11))
+        pretty_data["lighting_complete"]["night"]["Y-"] = bool(parsed_data["lighting_complete"] & (1 << 10))
+        pretty_data["lighting_complete"]["night"]["Z-"] = bool(parsed_data["lighting_complete"] & (1 << 9))
+        pretty_data["lighting_complete"]["night"]["Z+"] = bool(parsed_data["lighting_complete"] & (1 << 8))
+        pretty_data["lighting_complete"]["night"]["Y+"] = bool(parsed_data["lighting_complete"] & (1 << 7))
+        pretty_data["lighting_complete"]["night"]["X+"] = bool(parsed_data["lighting_complete"] & (1 << 6))
+        pretty_data["lighting_complete"]["day"]["X-"] = bool(parsed_data["lighting_complete"] & (1 << 5))
+        pretty_data["lighting_complete"]["day"]["Y-"] = bool(parsed_data["lighting_complete"] & (1 << 4))
+        pretty_data["lighting_complete"]["day"]["Z-"] = bool(parsed_data["lighting_complete"] & (1 << 3))
+        pretty_data["lighting_complete"]["day"]["Z+"] = bool(parsed_data["lighting_complete"] & (1 << 2))
+        pretty_data["lighting_complete"]["day"]["Y+"] = bool(parsed_data["lighting_complete"] & (1 << 1))
+        pretty_data["lighting_complete"]["day"]["X+"] = bool(parsed_data["lighting_complete"] & (1 << 0))
+
+        pretty_data["timestamp"] = unpack("u32", parsed_data["timestamp"])
+
+        pretty_data["name_id_mapping_version"] = unpack("u8", parsed_data["name_id_mapping_version"])
+
+        for mapping in parsed_data["name_id_mappings"]:
+            pretty_data["name_id_mappings"].append({"id": unpack("u16", mapping["id"]), "name": mapping["name"].decode("utf-8")})
+        
+        pretty_data["content_width"] = unpack("u8", parsed_data["content_width"])
+        pretty_data["params_width"] = unpack("u8", parsed_data["params_width"])
+
+        # TODO: support parsing node data fully dynamically depending on content_width and params_width
+
+        param0_format = "u16" # 2 bytes since format version 24
+        if pretty_data["content_width"] == 1:
+            param0_format = "u8"
+
+        for node in parsed_data["node_data"]:
+            pretty_data["node_data"].append({"param0": unpack(param0_format, node["param0"]), "param1": unpack("u8", node["param1"]), "param2": unpack("u8", node["param2"])})
+
+        if version < 23:
+            pass # TODO: implement this!
+        else:
+            pretty_data["node_metadata_version"] = unpack("u8", parsed_data["node_metadata_version"])
+            
+            if pretty_data["node_metadata_version"] > 0:
+                for metadata in parsed_data["node_metadata"]:
+                    pretty_metadata = {"position": unpack("u16", metadata["position"]), "vars": []}
+
+                    for var in metadata["vars"]:
+                        is_private = False
+                        if metadata["vars"]["is_private"]:
+                            is_private = bool(metadata["vars"]["is_private"] & 0x01)
+                        pretty_metadata["vars"].append({"key": var["key"].decode("utf-8"), "value": var["value"].decode("utf-8"), "is_private": is_private})
+    
+                    pretty_data["node_metadata"].append(pretty_metadata)
+
+        pretty_data["static_object_version"] = unpack("u8", parsed_data["static_object_version"])
+
+        for static_object in parsed_data["static_objects"]:
+            pretty_data["static_objects"].append({"type": unpack("u8", static_object["type"]),
+                "pos_x": unpack("s32", static_object["pos_x"])/10000,
+                "pos_y": unpack("s32", static_object["pos_y"])/10000,
+                "pos_z": unpack("s32", static_object["pos_z"])/10000,
+                "data": parsed_data["data"] # TODO: create a separate StaticObject class to handle these and parse separately
+            })
+
+        pretty_data["length_of_single_timer"] = unpack("u8", parsed_data["length_of_single_timer"])
+
+        for timer in parsed_data["timers"]:
+            pretty_data["timers"].append({"position": unpack("u16", timer["position"]), "timeout": unpack("s32", timer["timeout"])/1000, "elapsed": unpack("s32", timer["elapsed"])/1000})
+
+        return pretty_data
 
     def serialize(self, data=None, compressed=True):
         if data == None:
@@ -488,6 +602,9 @@ class MapBlock:
         pos_node = pos_get_node(posxyz)
 
         pos = (pos_node[2]*16*16 + pos_node[1]*16 + pos_node[0])
+
+        if pos > 4095:
+            return self
 
         mapping_id = None
         
