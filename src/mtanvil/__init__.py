@@ -36,12 +36,12 @@ type_to_format = {
 def unpack(type_name, data):
     if not type_name in type_to_format:
         raise ValueError("Invalid format")
-    return struct.unpack(integer_to_format[type_name], data)[0]
+    return struct.unpack(type_to_format[type_name], data)[0]
 
 def pack(type_name, data):
     if not type_name in type_to_format:
         raise ValueError("Invalid format")
-    return struct.pack(integer_to_format[type_name], data)
+    return struct.pack(type_to_format[type_name], data)
 
 def pos_get_mapblock(pos):
     return (
@@ -392,11 +392,11 @@ class MapBlock:
 
         pretty_data["static_object_version"] = unpack("u8", parsed_data["static_object_version"])
 
-        for static_object in parsed_data["static_objects"]:
+        for static_object in (parsed_data["static_objects"] or []):
             pretty_data["static_objects"].append({"type": unpack("u8", static_object["type"]),
                 "pos_x": unpack("s32", static_object["pos_x"])/10000,
                 "pos_y": unpack("s32", static_object["pos_y"])/10000,
-                "pos_z": unpack("s32", static_object["pos_z"])/10000,
+                "pos_z": unpack("s32", static_object["pos_z"])/10000})
         if parsed_data["length_of_single_timer"] is not None:
             pretty_data["length_of_single_timer"] = unpack("u8", parsed_data["length_of_single_timer"])
 
@@ -651,24 +651,24 @@ class MapBlock:
         
         if isinstance(data["name_id_mappings"], list):
             for mapping in data["name_id_mappings"]:
-                if mapping["name"].decode("utf-8") == param0:
+                if mapping["name"] == param0:
                     mapping_id = mapping["id"]
 
         if not mapping_id:
             used_ids = []
             for mapping in data["name_id_mappings"]:
-                used_ids.append(struct.unpack(">H", mapping["id"])[0])
+                used_ids.append(mapping["id"])
             
             next_id = 0
             while next_id in used_ids:
                 next_id += 1
 
-            data["name_id_mappings"].append({"id": struct.pack(">H", next_id), "name_len": struct.pack(">H", len(param0.encode("utf-8"))), "name": param0.encode("utf-8")})
-            mapping_id = struct.pack(">H", next_id)
+            data["name_id_mappings"].append({"id": next_id, "name": param0})
+            mapping_id = next_id
 
         data["node_data"][pos]["param0"] = mapping_id
-        data["node_data"][pos]["param1"] = struct.pack(">B", param1)
-        data["node_data"][pos]["param2"] = struct.pack(">B", param2)
+        data["node_data"][pos]["param1"] = param1
+        data["node_data"][pos]["param2"] = param2
 
         self.data = data
         return self
