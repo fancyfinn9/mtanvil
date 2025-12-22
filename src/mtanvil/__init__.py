@@ -57,6 +57,152 @@ def pos_get_node(pos):
         pos[2] % 16,
     )
 
+class StaticObject:
+    def __init__(self, object_type, pos, data):
+        self.object_type = object_type
+        self.pos = pos
+        self.raw = data
+        self.data = self.parse(data)
+
+    def parse(self, data=None):
+        if data is None:
+            data = self.raw
+            if not data:
+                return None
+
+        parsed_data = {
+            "compatibility_byte": None, "entity_name_length": None, "entity_name": None,
+            "static_data_length": None, "static_data": None,
+            "hp": None, "velocity": None, "yaw": None,
+            "version2": None, "pitch": None, "roll": None, "guid": None
+        }
+
+        parsed_data["compatibility_byte"], data = pop_bytes(data, 1)
+        if unpack("u8", parsed_data["compatibility_byte"]) != 1:
+            print("WARNING: compatibility_byte is not 1")
+
+        parsed_data["entity_name_length"], data = pop_bytes(data, 2)
+
+        parsed_data["entity_name"], data = pop_bytes(data, unpack("u16", parsed_data["entity_name_length"]))
+
+        parsed_data["static_data_length"], data = pop_bytes(data, 4)
+
+        parsed_data["static_data"], data = pop_bytes(data, unpack("u32", parsed_data["static_data_length"]))
+
+        parsed_data["hp"], data = pop_bytes(data, 2)
+
+        velocity_x, data = pop_bytes(data, 4)
+        velocity_y, data = pop_bytes(data, 4)
+        velocity_z, data = pop_bytes(data, 4)
+
+        parsed_data["velocity"] = (velocity_x, velocity_y, velocity_z)
+
+        parsed_data["yaw"], data = pop_bytes(data, 4)
+
+        if len(data) > 0: # Since protocol version 37
+            parsed_data["version2"], data = pop_bytes(data, 1)
+            if not (unpack("u8", parsed_data["version2"]) > 0 and unpack("u8", parsed_data["version2"]) < 3):
+                print("WARNING: version2 is not 1 or 2")
+
+            parsed_data["pitch"], data = pop_bytes(data, 4)
+
+            parsed_data["roll"], data = pop_bytes(data, 4)
+
+            if unpack("u8", parsed_data["version2"]) >= 2:
+                parsed_data["guid"], data = pop_bytes(data, 16)
+
+        pretty_data = {
+            "compatibility_byte": None, "entity_name": None, "static_data": None,
+            "hp": None, "velocity": None, "yaw": None,
+            "version2": None, "pitch": None, "roll": None, "guid": None
+        }
+
+        pretty_data["compatibility_byte"] = unpack("u8", parsed_data["compatibility_byte"])
+
+        pretty_data["entity_name"] = parsed_data["entity_name"].decode("utf-8")
+
+        pretty_data["static_data"] = parsed_data["static_data"].decode("utf-8")
+
+        pretty_data["hp"] = unpack("s16", parsed_data["hp"])
+
+        velocity_x = unpack("s32", parsed_data["velocity"][0])/10000
+        velocity_y = unpack("s32", parsed_data["velocity"][1])/10000
+        velocity_z = unpack("s32", parsed_data["velocity"][2])/10000
+        pretty_data["velocity"] = (velocity_x, velocity_y, velocity_z)
+
+        pretty_data["yaw"] = unpack("s32", parsed_data["yaw"])/1000
+
+        if parsed_data["version2"]:
+            pretty_data["version2"] = unpack("u8", parsed_data["version2"])
+
+            pretty_data["pitch"] = unpack("s32", parsed_data["pitch"])/1000
+
+            pretty_data["roll"] = unpack("s32", parsed_data["roll"])/1000
+
+            if pretty_data["version2"] >= 2:
+                pretty_data["guid"] = parsed_data["guid"]
+
+        return pretty_data
+
+    def serialize(self, data=None):
+        if data is None:
+            data = self.data
+            if data is None:
+                return None
+
+        serialized_data = bytearray()
+
+        # u8 compatibility_byte
+        serialized_data.extend(pack("u8", (data["compatibility_byte"] or 1)))
+
+        # u16 len
+        serialized_data.extend(pack("u16", len(data["entity_name"].encode("utf-8"))))
+
+        # u8[len] entity name
+        serialized_data.extend(data["entity_name"].encode("utf-8"))
+
+        # u32 len
+        serialized_data.extend(pack("u32", len(data["static_data"].encode("utf-8"))))
+
+        # u8[len] static data
+        serialized_data.extend(data["static_data"].encode("utf-8"))
+
+        # s16 hp
+        serialized_data.extend(pack("s16", data["hp"]))
+
+        # s32 velocity.x * 10000
+        serialized_data.extend(pack("s32", int(data["velocity"][0]*10000)))
+
+        # s32 velocity.y * 10000
+        serialized_data.extend(pack("s32", int(data["velocity"][1]*10000)))
+
+        # s32 velocity.z * 10000
+        serialized_data.extend(pack("s32", int(data["velocity"][2]*10000)))
+
+        # s32 yaw * 1000
+        serialized_data.extend(pack("s32", int(data["yaw"]*1000)))
+
+        # Since protocol version 37:
+
+        if data["version2"]:
+            # u8 version2 (=1 or 2)
+            serialized_data.extend(pack("u8", data["version2"]))
+
+            # s32 pitch * 1000
+            serialized_data.extend(pack("s32", int(data["pitch"]*1000)))
+
+            # s32 roll * 1000
+            serialized_data.extend(pack("s32", int(data["roll"]*1000)))
+
+            # if version2 >= 2:
+            if data["version2"] >= 2:
+                # u8[16] guid
+                serialized_data.extend(data["guid"])
+
+        serialized_data = bytes(serialized_data)
+
+        return serialized_data
+
 class MapBlock:
     def __init__(self, pos, data):
         self.pos = pos
@@ -392,10 +538,18 @@ class MapBlock:
         pretty_data["static_object_version"] = unpack("u8", parsed_data["static_object_version"])
 
         for static_object in (parsed_data["static_objects"] or []):
-            pretty_data["static_objects"].append({"type": unpack("u8", static_object["type"]),
-                "pos_x": unpack("s32", static_object["pos_x"])/10000,
-                "pos_y": unpack("s32", static_object["pos_y"])/10000,
-                "pos_z": unpack("s32", static_object["pos_z"])/10000})
+            pretty_data["static_objects"].append(
+                StaticObject(
+                    unpack("u8", static_object["type"]),
+                    (
+                        unpack("s32", static_object["pos_x"])/10000,
+                        unpack("s32", static_object["pos_y"])/10000,
+                        unpack("s32", static_object["pos_z"])/10000
+                    ),
+                    static_object["data"]
+                )
+            )
+
         if parsed_data["length_of_single_timer"] is not None:
             pretty_data["length_of_single_timer"] = unpack("u8", parsed_data["length_of_single_timer"])
 
@@ -584,22 +738,28 @@ class MapBlock:
                 # foreach static_object_count
                 for obj in data["static_objects"]:
                     # u8 type
-                    serialized_data.extend(pack("u8", obj["type"]))
+                    serialized_data.extend(pack("u8", obj.object_type))
 
                     # s32 pos_x_nodes * 10000
-                    serialized_data.extend(pack("s32", int(obj["pos_x"]*10000)))
+                    serialized_data.extend(pack("s32", int(obj.pos[0]*10000)))
 
                     # s32 pos_y_nodes * 10000
-                    serialized_data.extend(pack("s32", int(obj["pos_y"]*10000)))
+                    serialized_data.extend(pack("s32", int(obj.pos[1]*10000)))
 
                     # s32 pos_z_nodes * 10000
-                    serialized_data.extend(pack("s32", int(obj["pos_z"]*10000)))
+                    serialized_data.extend(pack("s32", int(obj.pos[2]*10000)))
 
-                    # u16 data_size
-                    serialized_data.extend(pack("u16", len(obj["data"])))
+                    serialized = obj.serialize()
 
-                    # u8[data_size] data
-                    serialized_data.extend(obj["data"])
+                    if serialized:
+                        # u16 data_size
+                        serialized_data.extend(pack("u16", len(serialized)))
+
+                        # u8[data_size] data
+                        serialized_data.extend(serialized)
+                    else:
+                        # u16 data_size
+                        serialized_data.extend(pack("u16", 0))
             else:
                 serialized_data.extend(pack("u16", 0))
         else:
@@ -619,10 +779,10 @@ class MapBlock:
                     serialized_data.extend(pack("u16", timer["position"]))
 
                     # s32 timeout
-                    serialized_data.extend(pack("s32", timer["timeout"]*1000))
+                    serialized_data.extend(pack("s32", int(timer["timeout"]*1000)))
 
                     # s32 elapsed
-                    serialized_data.extend(pack("s32", timer["elapsed"]*1000))
+                    serialized_data.extend(pack("s32", int(timer["elapsed"]*1000)))
 
             else:
                 serialized_data.extend(pack("u16", 0))
