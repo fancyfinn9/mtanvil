@@ -328,35 +328,38 @@ class MapBlock:
         pretty_data["was_compressed"] = parsed_data["was_compressed"]
         pretty_data["version"] = version
 
-        pretty_data["flags"]["is_underground"] = bool(parsed_data["flags"] & 0x01)
-        pretty_data["flags"]["day_night_differs"] = bool(parsed_data["flags"] & 0x02)
-        pretty_data["flags"]["lighting_expired"] = bool(parsed_data["flags"] & 0x04)
-        pretty_data["flags"]["generated"] = bool(parsed_data["flags"] & 0x08)
+        flags_int = unpack("u8", parsed_data["flags"])
+        pretty_data["flags"]["is_underground"] = bool(flags_int & 0x01)
+        pretty_data["flags"]["day_night_differs"] = bool(flags_int & 0x02)
+        pretty_data["flags"]["lighting_expired"] = bool(flags_int & 0x04)
+        pretty_data["flags"]["generated"] = bool(flags_int & 0x08)
 
         # TODO: find a way to do this with less code: bool(parsed_data["lighting_complete"] & (1 << X)) is used every time
 
-        pretty_data["lighting_complete"]["nothing1"] = bool(parsed_data["lighting_complete"] & (1 << 15))
-        pretty_data["lighting_complete"]["nothing2"] = bool(parsed_data["lighting_complete"] & (1 << 14))
-        pretty_data["lighting_complete"]["nothing3"] = bool(parsed_data["lighting_complete"] & (1 << 13))
-        pretty_data["lighting_complete"]["nothing4"] = bool(parsed_data["lighting_complete"] & (1 << 12))
-        pretty_data["lighting_complete"]["night"]["X-"] = bool(parsed_data["lighting_complete"] & (1 << 11))
-        pretty_data["lighting_complete"]["night"]["Y-"] = bool(parsed_data["lighting_complete"] & (1 << 10))
-        pretty_data["lighting_complete"]["night"]["Z-"] = bool(parsed_data["lighting_complete"] & (1 << 9))
-        pretty_data["lighting_complete"]["night"]["Z+"] = bool(parsed_data["lighting_complete"] & (1 << 8))
-        pretty_data["lighting_complete"]["night"]["Y+"] = bool(parsed_data["lighting_complete"] & (1 << 7))
-        pretty_data["lighting_complete"]["night"]["X+"] = bool(parsed_data["lighting_complete"] & (1 << 6))
-        pretty_data["lighting_complete"]["day"]["X-"] = bool(parsed_data["lighting_complete"] & (1 << 5))
-        pretty_data["lighting_complete"]["day"]["Y-"] = bool(parsed_data["lighting_complete"] & (1 << 4))
-        pretty_data["lighting_complete"]["day"]["Z-"] = bool(parsed_data["lighting_complete"] & (1 << 3))
-        pretty_data["lighting_complete"]["day"]["Z+"] = bool(parsed_data["lighting_complete"] & (1 << 2))
-        pretty_data["lighting_complete"]["day"]["Y+"] = bool(parsed_data["lighting_complete"] & (1 << 1))
-        pretty_data["lighting_complete"]["day"]["X+"] = bool(parsed_data["lighting_complete"] & (1 << 0))
+        if parsed_data["lighting_complete"] is not None:
+            lighting_int = unpack("u16", parsed_data["lighting_complete"])
+            pretty_data["lighting_complete"]["nothing1"] = bool(lighting_int & (1 << 15))
+            pretty_data["lighting_complete"]["nothing2"] = bool(lighting_int & (1 << 14))
+            pretty_data["lighting_complete"]["nothing3"] = bool(lighting_int & (1 << 13))
+            pretty_data["lighting_complete"]["nothing4"] = bool(lighting_int & (1 << 12))
+            pretty_data["lighting_complete"]["night"]["X-"] = bool(lighting_int & (1 << 11))
+            pretty_data["lighting_complete"]["night"]["Y-"] = bool(lighting_int & (1 << 10))
+            pretty_data["lighting_complete"]["night"]["Z-"] = bool(lighting_int & (1 << 9))
+            pretty_data["lighting_complete"]["night"]["Z+"] = bool(lighting_int & (1 << 8))
+            pretty_data["lighting_complete"]["night"]["Y+"] = bool(lighting_int & (1 << 7))
+            pretty_data["lighting_complete"]["night"]["X+"] = bool(lighting_int & (1 << 6))
+            pretty_data["lighting_complete"]["day"]["X-"] = bool(lighting_int & (1 << 5))
+            pretty_data["lighting_complete"]["day"]["Y-"] = bool(lighting_int & (1 << 4))
+            pretty_data["lighting_complete"]["day"]["Z-"] = bool(lighting_int & (1 << 3))
+            pretty_data["lighting_complete"]["day"]["Z+"] = bool(lighting_int & (1 << 2))
+            pretty_data["lighting_complete"]["day"]["Y+"] = bool(lighting_int & (1 << 1))
+            pretty_data["lighting_complete"]["day"]["X+"] = bool(lighting_int & (1 << 0))
 
         pretty_data["timestamp"] = unpack("u32", parsed_data["timestamp"])
 
         pretty_data["name_id_mapping_version"] = unpack("u8", parsed_data["name_id_mapping_version"])
 
-        for mapping in parsed_data["name_id_mappings"]:
+        for mapping in (parsed_data["name_id_mappings"] or []):
             pretty_data["name_id_mappings"].append({"id": unpack("u16", mapping["id"]), "name": mapping["name"].decode("utf-8")})
         
         pretty_data["content_width"] = unpack("u8", parsed_data["content_width"])
@@ -376,17 +379,16 @@ class MapBlock:
         else:
             pretty_data["node_metadata_version"] = unpack("u8", parsed_data["node_metadata_version"])
             
-            if pretty_data["node_metadata_version"] > 0:
-                for metadata in parsed_data["node_metadata"]:
-                    pretty_metadata = {"position": unpack("u16", metadata["position"]), "vars": []}
+            for metadata in (parsed_data["node_metadata"] or []):
+                pretty_metadata = {"position": unpack("u16", metadata["position"]), "vars": []}
 
-                    for var in metadata["vars"]:
-                        is_private = False
-                        if metadata["vars"]["is_private"]:
-                            is_private = bool(metadata["vars"]["is_private"] & 0x01)
-                        pretty_metadata["vars"].append({"key": var["key"].decode("utf-8"), "value": var["value"].decode("utf-8"), "is_private": is_private})
-    
-                    pretty_data["node_metadata"].append(pretty_metadata)
+                for var in (metadata["vars"] or []):
+                    is_private = False
+                    if var.get("is_private"):
+                        is_private = bool(unpack("u8", var["is_private"]) & 0x01)
+                    pretty_metadata["vars"].append({"key": var["key"].decode("utf-8"), "value": var["value"].decode("utf-8"), "is_private": is_private})
+
+                pretty_data["node_metadata"].append(pretty_metadata)
 
         pretty_data["static_object_version"] = unpack("u8", parsed_data["static_object_version"])
 
@@ -395,12 +397,10 @@ class MapBlock:
                 "pos_x": unpack("s32", static_object["pos_x"])/10000,
                 "pos_y": unpack("s32", static_object["pos_y"])/10000,
                 "pos_z": unpack("s32", static_object["pos_z"])/10000,
-                "data": parsed_data["data"] # TODO: create a separate StaticObject class to handle these and parse separately
-            })
+        if parsed_data["length_of_single_timer"] is not None:
+            pretty_data["length_of_single_timer"] = unpack("u8", parsed_data["length_of_single_timer"])
 
-        pretty_data["length_of_single_timer"] = unpack("u8", parsed_data["length_of_single_timer"])
-
-        for timer in parsed_data["timers"]:
+        for timer in (parsed_data["timers"] or []):
             pretty_data["timers"].append({"position": unpack("u16", timer["position"]), "timeout": unpack("s32", timer["timeout"])/1000, "elapsed": unpack("s32", timer["elapsed"])/1000})
 
         return pretty_data
@@ -413,181 +413,222 @@ class MapBlock:
 
         # TODO: support serializing in other MapBlock format versions?
 
-        if struct.unpack(">B", data["version"])[0] != 29:
+        if data["version"] != 29:
             print("WARNING: data will be converted to MapBlock format version 29")
 
         # u8 version
-        serialized_data.extend(struct.pack(">B", 29))
+        serialized_data.extend(pack("u8", 29))
 
         # u8 flags
         if data["flags"]:
-            serialized_data.extend(data["flags"])
+            flags = 0
+            if data["flags"]["is_underground"]:
+                flags |= 0x01
+            if data["flags"]["day_night_differs"]:
+                flags |= 0x02
+            if data["flags"]["lighting_expired"]:
+                flags |= 0x04
+            if data["flags"]["generated"]:
+                flags |= 0x08
+
+            serialized_data.extend(pack("u8", flags))
         else:
             flags = 0
             flags &= ~0x01 # is_underground
             flags |= 0x02 # day_night_differs
             flags |= 0x04 # lighting_expired (deprecated)
             flags |= 0x08 # generated
-            serialized_data.extend(struct.pack(">B", flags))
+            serialized_data.extend(pack("u8", flags))
 
         # u16 lighting_complete
         if data["lighting_complete"]:
-            serialized_data.extend(data["lighting_complete"])
+            lighting_complete = 0
+            if data["lighting_complete"]["nothing1"]:
+                lighting_complete |= (1 << 15)
+            if data["lighting_complete"]["nothing2"]:
+                lighting_complete |= (1 << 14)
+            if data["lighting_complete"]["nothing3"]:
+                lighting_complete |= (1 << 13)
+            if data["lighting_complete"]["nothing4"]:
+                lighting_complete |= (1 << 12)
+            if data["lighting_complete"]["night"]["X-"]:
+                lighting_complete |= (1 << 11)
+            if data["lighting_complete"]["night"]["Y-"]:
+                lighting_complete |= (1 << 10)
+            if data["lighting_complete"]["night"]["Z-"]:
+                lighting_complete |= (1 << 9)
+            if data["lighting_complete"]["night"]["Z+"]:
+                lighting_complete |= (1 << 8)
+            if data["lighting_complete"]["night"]["Y+"]:
+                lighting_complete |= (1 << 7)
+            if data["lighting_complete"]["night"]["X+"]:
+                lighting_complete |= (1 << 6)
+            if data["lighting_complete"]["day"]["X-"]:
+                lighting_complete |= (1 << 5)
+            if data["lighting_complete"]["day"]["Y-"]:
+                lighting_complete |= (1 << 4)
+            if data["lighting_complete"]["day"]["Z-"]:
+                lighting_complete |= (1 << 3)
+            if data["lighting_complete"]["day"]["Z+"]:
+                lighting_complete |= (1 << 2)
+            if data["lighting_complete"]["day"]["Y+"]:
+                lighting_complete |= (1 << 1)
+            if data["lighting_complete"]["day"]["X+"]:
+                lighting_complete |= (1 << 0)
+
+            serialized_data.extend(pack("u16", lighting_complete))
         else:
             lighting_complete = 0b1111111111111110
-            serialized_data.extend(struct.pack(">H", lighting_complete))
+            serialized_data.extend(pack("u16", lighting_complete))
 
         # u32 timestamp
         if data["timestamp"]:
-            serialized_data.extend(data["timestamp"])
+            serialized_data.extend(pack("u32", data["timestamp"]))
         else:
             timestamp = 0xffffffff # Invalid/unknown timestamp
-            serialized_data.extend(struct.pack(">I", timestamp))
+            serialized_data.extend(pack("u32", timestamp))
 
         # u8 name_id_mapping_version
-        serialized_data.extend(struct.pack(">B", 0)) # Should be 0
+        serialized_data.extend(pack("u8", 0)) # Should be 0
 
         # u16 num_name_id_mappings
         if data["name_id_mappings"]:
-            serialized_data.extend(struct.pack(">H", len(data["name_id_mappings"])))
+            serialized_data.extend(pack("u16", len(data["name_id_mappings"])))
 
             # foreach num_name_id_mappings
 
             for mapping in data["name_id_mappings"]:
                 # u16 id
-                serialized_data.extend(mapping["id"])
+                serialized_data.extend(pack("u16", mapping["id"]))
 
                 # u16 name_len
-                serialized_data.extend(struct.pack(">H", len(mapping["name"])))
+                serialized_data.extend(pack("u16", len(mapping["name"])))
 
                 # u8[name_len] name
-                serialized_data.extend(mapping["name"])
+                serialized_data.extend(mapping["name"].encode("utf-8"))
         else:
-            serialized_data.extend(struct.pack(">H", 0))
+            serialized_data.extend(pack("u16", 0))
 
         # u8 content_width
-        serialized_data.extend(struct.pack(">B", 2)) # Should be 2
+        serialized_data.extend(pack("u8", (data["content_width"] or 2))) # Should be 2
 
         # u8 params_width
-        serialized_data.extend(struct.pack(">B", 2)) # Should be 2
+        serialized_data.extend(pack("u8", (data["params_width"] or 2))) # Should be 2
 
-        # u16[4096] param0 fields
+        # u<content_width*8>[4096] param0 fields
         for node in data["node_data"]:
-            serialized_data.extend(node["param0"])
+            serialized_data.extend(pack("u"+str((data["content_width"] or 2)*8), node["param0"]))
 
         # u8[4096] param1 fields
         for node in data["node_data"]:
-            serialized_data.extend(node["param1"])
+            serialized_data.extend(pack("u"+str((data["params_width"] or 2)*4), node["param1"]))
 
         # u8[4096] param2 fields
         for node in data["node_data"]:
-            serialized_data.extend(node["param2"])
+            serialized_data.extend(pack("u"+str((data["params_width"] or 2)*4), node["param2"]))
 
         # u8 node_metadata_version
         # If there is 0 node metadata, this is 0, otherwise it is 2
         if data["node_metadata"]:
             if len(data["node_metadata"]) > 0:
-                serialized_data.extend(struct.pack(">B", 2))
+                serialized_data.extend(pack("u8", 2))
 
                 # u16 num_node_metadata
-                serialized_data.extend(struct.pack(">H", len(data["node_metadata"])))
+                serialized_data.extend(pack("u16", len(data["node_metadata"])))
 
                 # foreach num_node_metadata
                 for node in data["node_metadata"]:
                     # u16 position
-                    serialized_data.extend(node["position"])
+                    serialized_data.extend(pack("u16", node["position"]))
 
                     # u32 num_vars
                     if node["vars"]:
                         if len(node["vars"]) > 0:
-                            serialized_data.extend(struct.pack(">I", len(node["vars"])))
+                            serialized_data.extend(pack("u32", len(node["vars"])))
                             
                             # foreach num_vars
                             for var in node["vars"]:
                                 # u16 key_len
-                                serialized_data.extend(struct.pack(">H", len(var["key"])))
+                                serialized_data.extend(pack("u16", len(var["key"])))
 
                                 # u8[key_len] key
-                                serialized_data.extend(var["key"])
+                                serialized_data.extend(var["key"].encode("utf-8"))
 
                                 # u16 val_len
-                                serialized_data.extend(struct.pack(">H", len(var["value"])))
+                                serialized_data.extend(pack("u16", len(var["value"])))
 
                                 # u8[val_len] value
-                                serialized_data.extend(var["value"])
+                                serialized_data.extend(var["value"].encode("utf-8"))
 
                                 # u8 is_private
-                                if struct.unpack(">B", var["is_private"])[0] == 1:
-                                    serialized_data.extend(struct.pack(">B", 1))
+                                if var["is_private"]:
+                                    serialized_data.extend(pack("u8", 1))
                                 else:
-                                    serialized_data.extend(struct.pack(">B", 0))
-
+                                    serialized_data.extend(pack("u8", 0))
                         else:
-                            serialized_data.extend(struct.pack(">I", 0))
+                            serialized_data.extend(pack("u32", 0))
                     else:
-                        serialized_data.extend(struct.pack(">I", 0))
-
-
+                        serialized_data.extend(pack("u32", 0))
             else:
-                serialized_data.extend(struct.pack(">B", 0))
+                serialized_data.extend(pack("u8", 0))
         else:
-            serialized_data.extend(struct.pack(">B", 0))
+            serialized_data.extend(pack("u8", 0))
 
         # u8 static object version
-        serialized_data.extend(struct.pack(">B", 0))
+        serialized_data.extend(pack("u8", (data["static_object_version"] or 0)))
 
         # u16 static_object_count
         if data["static_objects"]:
             if len(data["static_objects"]) > 0:
-                serialized_data.extend(struct.pack(">H", len(data["static_objects"])))
+                serialized_data.extend(pack("u16", len(data["static_objects"])))
 
                 # foreach static_object_count
                 for obj in data["static_objects"]:
                     # u8 type
-                    serialized_data.extend(obj["type"])
+                    serialized_data.extend(pack("u8", obj["type"]))
 
                     # s32 pos_x_nodes * 10000
-                    serialized_data.extend(obj["pos_x_nodes"])
+                    serialized_data.extend(pack("s32", int(obj["pos_x"]*10000)))
 
                     # s32 pos_y_nodes * 10000
-                    serialized_data.extend(obj["pos_y_nodes"])
+                    serialized_data.extend(pack("s32", int(obj["pos_y"]*10000)))
 
                     # s32 pos_z_nodes * 10000
-                    serialized_data.extend(obj["pos_z_nodes"])
+                    serialized_data.extend(pack("s32", int(obj["pos_z"]*10000)))
 
                     # u16 data_size
-                    serialized_data.extend(struct.pack(">H", len(obj["data"])))
+                    serialized_data.extend(pack("u16", len(obj["data"])))
 
                     # u8[data_size] data
                     serialized_data.extend(obj["data"])
             else:
-                serialized_data.extend(struct.pack(">H", 0))
+                serialized_data.extend(pack("u16", 0))
         else:
-            serialized_data.extend(struct.pack(">H", 0))
+            serialized_data.extend(pack("u16", 0))
             
         # u8 length_of_single_timer
-        serialized_data.extend(struct.pack(">B", 10))
+        serialized_data.extend(pack("u8", (data["length_of_single_timer"] or 10)))
 
         # u16 num_of_timers
         if data["timers"]:
             if len(data["timers"]) > 0:
-                serialized_data.extend(struct.pack(">H", len(data["timers"])))
+                serialized_data.extend(pack("u16", len(data["timers"])))
 
                 # foreach num_of_timers
                 for timer in data["timers"]:
                     # u16 timer_position
-                    serialized_data.extend(timer["position"])
+                    serialized_data.extend(pack("u16", timer["position"]))
 
                     # s32 timeout
-                    serialized_data.extend(timer["timeout"])
+                    serialized_data.extend(pack("s32", timer["timeout"]*1000))
 
                     # s32 elapsed
-                    serialized_data.extend(timer["elapsed"])
+                    serialized_data.extend(pack("s32", timer["elapsed"]*1000))
 
             else:
-                serialized_data.extend(struct.pack(">H", 0))
+                serialized_data.extend(pack("u16", 0))
         else:
-            serialized_data.extend(struct.pack(">H", 0))
+            serialized_data.extend(pack("u16", 0))
 
         serialized_data = bytes(serialized_data)
 
