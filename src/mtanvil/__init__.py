@@ -119,13 +119,15 @@ class MapBlock:
                 parsed_data["name_id_mappings"] = mappings
         
         parsed_data["content_width"], data = pop_bytes(data, 1) # Should be 2 (map format version 24+) or 1
-        if version < 24 and struct.unpack(">B", parsed_data["content_width"])[0] != 1:
+        content_width = struct.unpack(">B", parsed_data["content_width"])[0]
+        if version < 24 and content_width != 1:
             print("WARNING: content_width is not 1")
-        elif version >= 24 and struct.unpack(">B", parsed_data["content_width"])[0] != 2:
+        elif version >= 24 and content_width != 2:
             print("WARNING: content_width is not 2")
 
         parsed_data["params_width"], data = pop_bytes(data, 1) # Should be 2
-        if struct.unpack(">B", parsed_data["params_width"])[0] != 2:
+        params_width = struct.unpack(">B", parsed_data["params_width"])[0]
+        if params_width != 2:
             print("WARNING: params_width is not 2")
 
         # Node data (+ node metadata) is Zlib-compressed before map version format 29
@@ -136,15 +138,15 @@ class MapBlock:
         param2_fields = []
         
         for _ in range(4096): # param0: Either 1 byte x 4096 or 2 bytes x 4096
-            param0, data = pop_bytes(data, struct.unpack(">B", parsed_data["content_width"])[0])
+            param0, data = pop_bytes(data, content_width)
             param0_fields.append(param0)
 
         for _ in range(4096): # param1: 1 byte x 4096
-            param1, data = pop_bytes(data, 1)
+            param1, data = pop_bytes(data, params_width // 2)
             param1_fields.append(param1)
 
         for _ in range(4096): # param2: 1 byte x 4096
-            param2, data = pop_bytes(data, 1)
+            param2, data = pop_bytes(data, params_width // 2)
             param2_fields.append(param2)
         
         node_data = []
@@ -365,17 +367,14 @@ class MapBlock:
         pretty_data["content_width"] = unpack("u8", parsed_data["content_width"])
         pretty_data["params_width"] = unpack("u8", parsed_data["params_width"])
 
-        # TODO: support parsing node data fully dynamically depending on content_width and params_width
-
-        param0_format = "u16" # 2 bytes since format version 24
-        if pretty_data["content_width"] == 1:
-            param0_format = "u8"
+        # TODO: add safeguards to make sure content_width and params_width are valid
 
         for node in parsed_data["node_data"]:
-            pretty_data["node_data"].append({"param0": unpack(param0_format, node["param0"]), "param1": unpack("u8", node["param1"]), "param2": unpack("u8", node["param2"])})
+            pretty_data["node_data"].append({"param0": unpack("u"+str(pretty_data["content_width"]*8), node["param0"]), "param1": unpack("u"+str(pretty_data["params_width"]*4), node["param1"]), "param2": unpack("u"+str(pretty_data["params_width"]*4), node["param2"])})
 
         if version < 23:
-            pass # TODO: implement this!
+            pretty_data["node_metadata_version"] = unpack("u16", parsed_data["node_metadata_version"])
+
         else:
             pretty_data["node_metadata_version"] = unpack("u8", parsed_data["node_metadata_version"])
             
