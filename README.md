@@ -16,46 +16,14 @@ It is recommended that you familiarize yourself with the [Map File Format and Ma
 
 ## Installation
 
-Install mtanvil by running:
+Install mtanvil by running
 
 `pip install mtanvil`
 
-## Usage
+in your terminal.
 
-First of all, import mtanvil with
+## Docs
 
-`import mtanvil as anvil`
+You can find the comprehensive mtanvil docs [here](https://github.com/fancyfinn9/mtanvil/wiki).
 
-You can then load a world file:
-
-`world = anvil.World.from_file('/path/to/map.sqlite')`
-
-### World functions
-
-* `world.list_mapblocks()`: Returns a list of all MapBlocks present in the world file
-
-* `world.get_mapblock(pos)`: Returns a MapBlock. `pos` should be a tuple of the XYZ coords, eg (5, -4, 18)
-
-* `world.set_mapblock(pos, data)`: Writes a MapBlock to the world. `data` should be serialized, see MapBlock's functions
-
-> NOTE: you should ensure that the world is currently not in use by Luanti before writing to it
-
-* `world.get_all_mapblocks()`: Returns all MapBlocks present in the world file. Each list item is a tuple: (X, Y, Z, MapBlock)
-
-* `world.close()`: Closes the database connection. It is recommended to run this once you're finished with the World
-
-### MapBlock functions
-
-* `mapblock.data`: Dictionary of the parsed data
-
-* `mapblock.parse(data)`: Returns a dictionary of the parsed data. `data` must be a raw binary blob from the database
-
-* `mapblock.set_node(pos, param0, param1 = 0, param2 = 0)`: Sets the node at the specified co-ordinates. `param0` is the node name, eg `default:goldblock`
-
-* `mapblock.serialize(data = None, compressed = True)`: Turns dictionary of parsed data back into binary. If `data` is `None`, `mapblock.data` will be serialized instead. `compressed` is required for Luanti MapBlock format version 29+
-
-### Utility functions
-
-* `pos_get_mapblock(pos)`: Returns a tuplet with the position of the MapBlock that has the world co-ordinates provided
-
-* `pos_get_node(pos)`: Returns a tuplet with the position within the relevant MapBlock (see function above) of the world co-ordinates provided
+Please open an issue if you find that something has not been documented properly!
