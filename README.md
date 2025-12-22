@@ -9,6 +9,11 @@ The name comes from Luanti’s former name (‘MT’ for Minetest) and the Minec
 > This is extremely under development so please don't use this for any major projects right now. Future updates _will_ have breaking changes.
 >
 > However, testing is welcome so please do open an issue if you find problems with it.
+>
+> Features that are not supported (yet):
+> * Node inventories (due to the lack of documentation, I must spend more time researching). Loading a MapBlock with any node inventories will probably fail.
+> * Older MapBlock formats (<29) may not serialize correctly. This will be fixed very soon.
+> * Older MapBlock formats may not load correctly (due to the lack of documentation of the specifics of their zlib compression).
 
 mtanvil fully supports MapBlock format version 29 (latest). Other versions may not be fully supported but should receive full support in the future.
 
