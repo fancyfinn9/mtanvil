@@ -5,20 +5,27 @@ build-backend = "hatchling.build"
 [project]
 name = "mtanvil"
 version = "0.1.0"
+dependencies = [
+  "zstandard",
+]
+requires-python = ">=3.9"
 authors = [
   { name="fancyfinn9", email="fancyfinn9@proton.me" },
 ]
 description = "Parser and editor for Luanti worlds"
-readme = "README.md"
-requires-python = ">=3.9"
+keywords = ["Luanti", "Minetest"]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
-    "Development Status :: 3 - Alpha"
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Topic :: File Formats",
 ]
+readme = "README.md"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 
 [project.urls]
 Homepage = "https://github.com/fancyfinn9/mtanvil"
 Issues = "https://github.com/fancyfinn9/mtanvil/issues"
+Docs = "https://github.com/fancyfinn9/mtanvil/wiki"
