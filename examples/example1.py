@@ -1,11 +1,21 @@
-# This example opens a world, loads the MapBlock that contains node 0,0,0, sets it to a gold block, and writes it
+# This example opens a world, loads the MapBlock that contains node 0,0,0, sets some nodes, and writes it
 
 import mtanvil as anvil
+
+print(anvil.__file__)
 
 world = anvil.World.from_file('/path/to/map.sqlite')
 
 mapblock = world.get_mapblock((0,0,0))
 
-mapblock.set_node((0,0,0), "default:goldblock").set_node((0,1,0), "default:goldblock") # It chains!
+# Option 1: Get an existing node
+node = mapblock.get_node((0,0,0))
 
-world.set_mapblock((0,0,0), mapblock.serialize())
+# Option 2: Create a blank node
+node = anvil.Node()
+node.set_name("default:goldblock")
+
+for i in range(5):
+    mapblock.set_node((0,i,0), node)
+
+world.set_mapblock((0,0,0), mapblock)

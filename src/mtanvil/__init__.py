@@ -57,6 +57,21 @@ def pos_get_node(pos):
         pos[2] % 16,
     )
 
+class Node:
+    def __init__(self, data=None):
+        self.pos = None
+        self.raw = data
+        self.data = data or {"name": "ignore", "param1": 0, "param2": 0, "metadata": [], "timers": []}
+
+    def set_name(self, name):
+        self.data["name"] = name
+
+    def set_param1(self, param1):
+        self.data["param1"] = param1
+
+    def set_param2(self, param2):
+        self.data["param2"] = param2
+
 class StaticObject:
     def __init__(self, object_type, pos, data):
         self.object_type = object_type
@@ -467,7 +482,7 @@ class MapBlock:
                 "day": {"X-": None, "Y-": None, "Z-": None, "Z+": None, "Y+": None, "X+": None}},
             "timestamp": None,
             "name_id_mapping_version": None, "name_id_mappings": [],
-            "content_width": None, "params_width": None, "node_data": [],
+            "content_width": None, "params_width": None, "node_data": [], "nodes": [],
             "node_metadata_version": None, "node_metadata": [],
             "static_object_version": None, "static_objects": [],
             "length_of_single_timer": None, "timers": []
@@ -556,6 +571,25 @@ class MapBlock:
         for timer in (parsed_data["timers"] or []):
             pretty_data["timers"].append({"position": unpack("u16", timer["position"]), "timeout": unpack("s32", timer["timeout"])/1000, "elapsed": unpack("s32", timer["elapsed"])/1000})
 
+        new_nodes = []
+        for node in pretty_data["node_data"]:
+            name = ""
+            for mapping in pretty_data["name_id_mappings"]:
+                if mapping["id"] == node["param0"]:
+                    name = mapping["name"]
+                    break
+            new_nodes.append({"name": name, "param1": node["param1"], "param2": node["param2"], "metadata": [], "timers": []})
+        for metadata in pretty_data["node_metadata"]:
+            new_nodes[metadata["position"]]["metadata"] = metadata["vars"]
+        for timer in pretty_data["timers"]:
+            new_nodes[timer["position"]]["timers"].append({"timeout": timer["timeout"], "elapsed": timer["elapsed"]})
+        
+        node_classes = []
+        for node in new_nodes:
+            node_classes.append(Node(node))
+
+        pretty_data["nodes"] = node_classes
+
         return pretty_data
 
     def serialize(self, data=None, compressed=True):
@@ -568,6 +602,13 @@ class MapBlock:
 
         if data["version"] != 29:
             print("WARNING: data will be converted to MapBlock format version 29")
+
+        # Quickly ensure that all of the node pos's are correct
+        
+        node_pos = 0
+        for node in data["nodes"]:
+            node.pos = node_pos
+            node_pos += 1
 
         # u8 version
         serialized_data.extend(pack("u8", 29))
@@ -644,21 +685,32 @@ class MapBlock:
         # u8 name_id_mapping_version
         serialized_data.extend(pack("u8", 0)) # Should be 0
 
+        names = []
+        for node in data["nodes"]:
+            if not node.data["name"] in names:
+                names.append(node.data["name"])
+
+        name_id_mappings = {}
+        current_id = 0
+        for name in names:
+            name_id_mappings[name] = current_id
+            current_id += 1
+
         # u16 num_name_id_mappings
-        if data["name_id_mappings"]:
-            serialized_data.extend(pack("u16", len(data["name_id_mappings"])))
+        if name_id_mappings:
+            serialized_data.extend(pack("u16", len(name_id_mappings)))
 
             # foreach num_name_id_mappings
 
-            for mapping in data["name_id_mappings"]:
+            for name, mapping_id in name_id_mappings.items():
                 # u16 id
-                serialized_data.extend(pack("u16", mapping["id"]))
+                serialized_data.extend(pack("u16", mapping_id))
 
                 # u16 name_len
-                serialized_data.extend(pack("u16", len(mapping["name"])))
+                serialized_data.extend(pack("u16", len(name.encode("utf-8"))))
 
                 # u8[name_len] name
-                serialized_data.extend(mapping["name"].encode("utf-8"))
+                serialized_data.extend(name.encode("utf-8"))
         else:
             serialized_data.extend(pack("u16", 0))
 
@@ -669,61 +721,63 @@ class MapBlock:
         serialized_data.extend(pack("u8", (data["params_width"] or 2))) # Should be 2
 
         # u<content_width*8>[4096] param0 fields
-        for node in data["node_data"]:
-            serialized_data.extend(pack("u"+str((data["content_width"] or 2)*8), node["param0"]))
+        for node in data["nodes"]:
+            serialized_data.extend(pack("u"+str((data["content_width"] or 2)*8), name_id_mappings[node.data["name"]]))
 
         # u8[4096] param1 fields
-        for node in data["node_data"]:
-            serialized_data.extend(pack("u"+str((data["params_width"] or 2)*4), node["param1"]))
+        for node in data["nodes"]:
+            serialized_data.extend(pack("u"+str((data["params_width"] or 2)*4), node.data["param1"]))
 
         # u8[4096] param2 fields
-        for node in data["node_data"]:
-            serialized_data.extend(pack("u"+str((data["params_width"] or 2)*4), node["param2"]))
+        for node in data["nodes"]:
+            serialized_data.extend(pack("u"+str((data["params_width"] or 2)*4), node.data["param2"]))
 
         # u8 node_metadata_version
         # If there is 0 node metadata, this is 0, otherwise it is 2
-        if data["node_metadata"]:
-            if len(data["node_metadata"]) > 0:
-                serialized_data.extend(pack("u8", 2))
+        node_metadata = []
+        for node in data["nodes"]:
+            if node.data["metadata"]:
+                node_metadata.append(node)
 
-                # u16 num_node_metadata
-                serialized_data.extend(pack("u16", len(data["node_metadata"])))
+        if len(node_metadata) > 0:
+            serialized_data.extend(pack("u8", 2))
 
-                # foreach num_node_metadata
-                for node in data["node_metadata"]:
-                    # u16 position
-                    serialized_data.extend(pack("u16", node["position"]))
+            # u16 num_node_metadata
+            serialized_data.extend(pack("u16", len(node_metadata)))
 
-                    # u32 num_vars
-                    if node["vars"]:
-                        if len(node["vars"]) > 0:
-                            serialized_data.extend(pack("u32", len(node["vars"])))
-                            
-                            # foreach num_vars
-                            for var in node["vars"]:
-                                # u16 key_len
-                                serialized_data.extend(pack("u16", len(var["key"])))
+            # foreach num_node_metadata
+            for node in node_metadata:
+                # u16 position
+                serialized_data.extend(pack("u16", node.pos))
 
-                                # u8[key_len] key
-                                serialized_data.extend(var["key"].encode("utf-8"))
+                # u32 num_vars
+                if node.data["metadata"]:
+                    if len(node.data["metadata"]) > 0:
+                        serialized_data.extend(pack("u32", len(node.data["metadata"])))
+                        
+                        # foreach num_vars
+                        for var in node.data["metadata"]:
+                            # u16 key_len
+                            serialized_data.extend(pack("u16", len(var["key"])))
 
-                                # u16 val_len
-                                serialized_data.extend(pack("u16", len(var["value"])))
+                            # u8[key_len] key
+                            serialized_data.extend(var["key"].encode("utf-8"))
 
-                                # u8[val_len] value
-                                serialized_data.extend(var["value"].encode("utf-8"))
+                            # u16 val_len
+                            serialized_data.extend(pack("u16", len(var["value"])))
 
-                                # u8 is_private
-                                if var["is_private"]:
-                                    serialized_data.extend(pack("u8", 1))
-                                else:
-                                    serialized_data.extend(pack("u8", 0))
-                        else:
-                            serialized_data.extend(pack("u32", 0))
+                            # u8[val_len] value
+                            serialized_data.extend(var["value"].encode("utf-8"))
+
+                            # u8 is_private
+                            if var["is_private"]:
+                                serialized_data.extend(pack("u8", 1))
+                            else:
+                                serialized_data.extend(pack("u8", 0))
                     else:
                         serialized_data.extend(pack("u32", 0))
-            else:
-                serialized_data.extend(pack("u8", 0))
+                else:
+                    serialized_data.extend(pack("u32", 0))
         else:
             serialized_data.extend(pack("u8", 0))
 
@@ -768,24 +822,27 @@ class MapBlock:
         # u8 length_of_single_timer
         serialized_data.extend(pack("u8", (data["length_of_single_timer"] or 10)))
 
+        timers = []
+        for node in data["nodes"]:
+            if len(node.data["timers"]) > 0:
+                for timer in node.data["timers"]:
+                    timers.append({"position": node.pos, "timeout": timer["timeout"], "elapsed": timer["elapsed"]})
+
         # u16 num_of_timers
-        if data["timers"]:
-            if len(data["timers"]) > 0:
-                serialized_data.extend(pack("u16", len(data["timers"])))
+        if len(timers) > 0:
+            serialized_data.extend(pack("u16", len(timers)))
 
-                # foreach num_of_timers
-                for timer in data["timers"]:
-                    # u16 timer_position
-                    serialized_data.extend(pack("u16", timer["position"]))
+            # foreach num_of_timers
+            for timer in timers:
+                # u16 timer_position
+                serialized_data.extend(pack("u16", timer["position"]))
 
-                    # s32 timeout
-                    serialized_data.extend(pack("s32", int(timer["timeout"]*1000)))
+                # s32 timeout
+                serialized_data.extend(pack("s32", int(timer["timeout"]*1000)))
 
-                    # s32 elapsed
-                    serialized_data.extend(pack("s32", int(timer["elapsed"]*1000)))
+                # s32 elapsed
+                serialized_data.extend(pack("s32", int(timer["elapsed"]*1000)))
 
-            else:
-                serialized_data.extend(pack("u16", 0))
         else:
             serialized_data.extend(pack("u16", 0))
 
@@ -796,40 +853,20 @@ class MapBlock:
 
         return serialized_data
 
-    def set_node(self, posxyz, param0, param1=0, param2=0):
-        data = self.data
+    def get_node(self, posxyz):
+        return self.data["nodes"][(posxyz[2]*16*16 + posxyz[1]*16 + posxyz[0])]
 
-        pos_node = pos_get_node(posxyz)
-
-        pos = (pos_node[2]*16*16 + pos_node[1]*16 + pos_node[0])
-
-        if pos > 4095:
+    def set_node(self, posxyz, node):
+        pos = (posxyz[2]*16*16 + posxyz[1]*16 + posxyz[0])
+        if pos < 0 or pos > 4095:
+            return self
+        if not isinstance(node, Node):
             return self
 
-        mapping_id = None
-        
-        if isinstance(data["name_id_mappings"], list):
-            for mapping in data["name_id_mappings"]:
-                if mapping["name"] == param0:
-                    mapping_id = mapping["id"]
+        node.pos = pos
 
-        if not mapping_id:
-            used_ids = []
-            for mapping in data["name_id_mappings"]:
-                used_ids.append(mapping["id"])
-            
-            next_id = 0
-            while next_id in used_ids:
-                next_id += 1
+        self.data["nodes"][pos] = node
 
-            data["name_id_mappings"].append({"id": next_id, "name": param0})
-            mapping_id = next_id
-
-        data["node_data"][pos]["param0"] = mapping_id
-        data["node_data"][pos]["param1"] = param1
-        data["node_data"][pos]["param2"] = param2
-
-        self.data = data
         return self
 
 class World:
@@ -878,11 +915,13 @@ class World:
             return MapBlock(pos, row[0])
         return None
 
-    def set_mapblock(self, pos, blob):
+    def set_mapblock(self, pos, mapblock):
+        if isinstance(mapblock, MapBlock):
+            mapblock = mapblock.serialize()
         cursor = self.conn.cursor()
         cursor.execute(
             "UPDATE blocks SET data=? WHERE x=? AND y=? AND z=?",
-            (sqlite3.Binary(blob), pos[0], pos[1], pos[2])
+            (sqlite3.Binary(mapblock), pos[0], pos[1], pos[2])
         )
         self.conn.commit()
 
