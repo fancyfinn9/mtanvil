@@ -57,6 +57,32 @@ def pos_get_node(pos):
         pos[2] % 16,
     )
 
+def is_inventory(data):
+    data = io.BytesIO(data)
+    data.readline() # Initial data
+    
+    while True:
+        line = data.readline().split(b" ")
+        if line[0] == b"EndInventory\n" or line[0] == b"end":
+            return True
+        elif line[0] == b"Width":
+            pass
+        elif line[0] == b"Item":
+            pass
+        elif line[0] == b"Empty\n":
+            pass
+        elif line[0] == b"EndInventoryList\n":
+            pass
+        else:
+            return False
+
+def extract_inventory(data):
+    pos = data.find(b'EndInventory\n')
+    if pos > -1:
+        inventory, data = pop_bytes(data, pos+len(b'EndInventory\n'))
+        return inventory, data
+    return None, data
+
 class Node:
     def __init__(self, data=None):
         self.pos = None
@@ -344,7 +370,7 @@ class MapBlock:
         elif version >= 23:
             parsed_data["node_metadata_version"], data = pop_bytes(data, 1)
             if struct.unpack(">B", parsed_data["node_metadata_version"])[0] == 0:
-                print("WARNING: node_metadata_version is 0, skipping node metadata")
+                print("INFO: node_metadata_version is 0, skipping node metadata")
             elif version < 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 1:
                 print("WARNING: node_metadata_version is not 1")
             elif version >= 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 2:
@@ -362,29 +388,30 @@ class MapBlock:
                     metadata["num_vars"], data = pop_bytes(data, 4)
 
                     var_s = []
-                    for _ in range(struct.unpack(">I", metadata["num_vars"])[0]):
+                    for _ in range(unpack("u32", metadata["num_vars"])):
                         var = {"key_len": None, "key": None, "val_len": None, "value": None, "is_private": None}
 
                         var["key_len"], data = pop_bytes(data, 2)
 
                         var["key"], data = pop_bytes(data, struct.unpack(">H", var["key_len"])[0])
 
-                        var["val_len"], data = pop_bytes(data, 2)
+                        var["val_len"], data = pop_bytes(data, 4)
 
-                        var["value"], data = pop_bytes(data, struct.unpack(">H", var["val_len"])[0])
+                        if var["key"].decode("utf-8") == "infotext" and is_inventory(data): # This is the most reliable way to check if this is an inventory
+                            var["value"], data = extract_inventory(data)
+
+                        else:
+                            var["value"], data = pop_bytes(data, unpack("u32", var["val_len"]))
 
                         if struct.unpack(">B", parsed_data["node_metadata_version"])[0] == 2:
-
                             var["is_private"], data = pop_bytes(data, 1)
                             if struct.unpack(">B", var["is_private"])[0] != 0 and struct.unpack(">B", var["is_private"])[0] != 1:
                                 print("WARNING: metadata's is_private is not 0 or 1, metadata may be corrupted")
-                        
+
                         var_s.append(var)
                     
                     if len(var_s) > 0:
                         metadata["vars"] = var_s
-
-                    # TODO: find out how serialized inventory is saved if it's empty, and implement serialized inventory
 
                     all_metadata.append(metadata)
 
@@ -763,8 +790,8 @@ class MapBlock:
                             # u8[key_len] key
                             serialized_data.extend(var["key"].encode("utf-8"))
 
-                            # u16 val_len
-                            serialized_data.extend(pack("u16", len(var["value"])))
+                            # u32 val_len
+                            serialized_data.extend(pack("u32", len(var["value"])))
 
                             # u8[val_len] value
                             serialized_data.extend(var["value"].encode("utf-8"))

@@ -2,8 +2,6 @@
 
 import mtanvil as anvil
 
-print(anvil.__file__)
-
 world = anvil.World.from_file('/path/to/map.sqlite')
 
 mapblock = world.get_mapblock((0,0,0))
@@ -19,3 +17,5 @@ for i in range(5):
     mapblock.set_node((0,i,0), node)
 
 world.set_mapblock((0,0,0), mapblock)
+
+world.close()

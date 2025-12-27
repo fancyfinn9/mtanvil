@@ -6,16 +6,18 @@ A Python library for parsing and editing Luanti worlds.
 
 The name comes from Luanti’s former name (‘MT’ for Minetest) and the Minecraft world parsing library ‘anvil’
 
-> This is extremely under development so please don't use this for any major projects right now. Future updates _will_ have breaking changes.
+> mtanvil is in alpha, so if you decide to use it then be aware of the following:
 >
-> However, testing is welcome so please do open an issue if you find problems with it.
+> Future updates _will_ have breaking changes.
+>
+> Testing is welcome, please do open an issue if you find any bugs or problems.
 >
 > Features that are not supported (yet):
-> * Node inventories (due to the lack of documentation, I must spend more time researching). Loading a MapBlock with any node inventories will probably fail.
-> * Older MapBlock formats (<29) may not load and/or serialize correctly (due to the lack of documentation of the specifics of their zlib compression). This will be fixed very soon.
+> * Some node inventories fail to load, such as the furnace in Minetest Game. I am researching this constantly and will have a solution to this very soon.
+> * Older MapBlock formats (<29) may not load and/or serialize correctly (due to the lack of documentation of the specifics of their zlib compression). This will be fixed soon.
 > * Older MapBlock formats (<23) will lose node metadata due to the old and new formats not being directly compatible. The conversion will be figured out in the future.
 
-mtanvil fully supports MapBlock format version 29 (latest). Other versions may not be fully supported but should receive full support in the future.
+mtanvil fully supports MapBlock format version 29 (latest). Other versions may not be fully supported right now but should receive full support in the future.
 
 It is recommended that you familiarize yourself with the [Map File Format and MapBlock Serialization Format](https://github.com/luanti-org/luanti/blob/master/doc/world_format.md#map-file-format) so that you fully understand what data mtanvil provides.
 
@@ -31,4 +33,4 @@ in your terminal.
 
 You can find the comprehensive mtanvil docs [here](https://github.com/fancyfinn9/mtanvil/wiki).
 
-Please open an issue if you find that something has not been documented properly!
+Please do open an issue if you find that something has not been documented properly.
