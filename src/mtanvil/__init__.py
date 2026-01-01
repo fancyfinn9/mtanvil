@@ -245,14 +245,26 @@ class StaticObject:
         return serialized_data
 
 class MapBlock:
-    def __init__(self, pos, data):
+    def __init__(self, pos=None, data=None, verbose=True):
         self.pos = pos
         self.raw = data
-        self.data = self.parse(data)
+        self.data = self.parse(data, verbose=verbose) or {
+            "was_compressed": None,
+            "version": 29, "flags": {"is_underground": False, "day_night_differs": True, "lighting_expired": True, "generated": False},
+            "lighting_complete": {"nothing1": True, "nothing2": True, "nothing3": True, "nothing4": True,
+                "night": {"X-": False, "Y-": False, "Z-": False, "Z+": False, "Y+": False, "X+": False},
+                "day": {"X-": False, "Y-": False, "Z-": False, "Z+": False, "Y+": False, "X+": False}},
+            "timestamp": 4294967295,
+            "name_id_mapping_version": 0, "name_id_mappings": [],
+            "content_width": 2, "params_width": 2, "node_data": [], "nodes": [],
+            "node_metadata_version": 2, "node_metadata": [],
+            "static_object_version": 0, "static_objects": [],
+            "length_of_single_timer": 10, "timers": []
+        }
         
-    def parse(self, data=None):
+    def parse(self, data=None, verbose=True):
         if data is None:
-            data = self.raw
+            return None
         
         parsed_data = {
             "was_compressed": None,
@@ -273,7 +285,8 @@ class MapBlock:
                 parsed_data["was_compressed"] = True
             except zstd.backend_c.ZstdError as e:
                 #print("> zstd error: "+str(e))
-                print("Could not decompress MapBlock data! Attempting to parse the raw data...")
+                if verbose:
+                    print("Could not decompress MapBlock data! Attempting to parse the raw data...")
                 parsed_data["was_compressed"] = False
         
         parsed_data["flags"], data = pop_bytes(data, 1)
@@ -285,7 +298,7 @@ class MapBlock:
             parsed_data["timestamp"], data = pop_bytes(data, 4)
 
             parsed_data["name_id_mapping_version"], data = pop_bytes(data, 1) # Should be 0 (map format version 29 (current))
-            if struct.unpack(">B", parsed_data["name_id_mapping_version"])[0] != 0:
+            if struct.unpack(">B", parsed_data["name_id_mapping_version"])[0] != 0 and verbose:
                 print("WARNING: name_id_mapping_version is not 0")
 
             parsed_data["num_name_id_mappings"], data = pop_bytes(data, 2)
@@ -307,14 +320,14 @@ class MapBlock:
         
         parsed_data["content_width"], data = pop_bytes(data, 1) # Should be 2 (map format version 24+) or 1
         content_width = struct.unpack(">B", parsed_data["content_width"])[0]
-        if version < 24 and content_width != 1:
+        if version < 24 and content_width != 1 and verbose:
             print("WARNING: content_width is not 1")
-        elif version >= 24 and content_width != 2:
+        elif version >= 24 and content_width != 2 and verbose:
             print("WARNING: content_width is not 2")
 
         parsed_data["params_width"], data = pop_bytes(data, 1) # Should be 2
         params_width = struct.unpack(">B", parsed_data["params_width"])[0]
-        if params_width != 2:
+        if params_width != 2 and verbose:
             print("WARNING: params_width is not 2")
 
         # Node data (+ node metadata) is Zlib-compressed before map version format 29
@@ -344,7 +357,7 @@ class MapBlock:
 
         if version < 23:
             parsed_data["node_metadata_version"], data = pop_bytes(data, 2)
-            if struct.unpack(">H", parsed_data["node_metadata_version"])[0] != 1:
+            if struct.unpack(">H", parsed_data["node_metadata_version"])[0] != 1 and verbose:
                 print("WARNING: node_metadata_version is not 1")
             
             parsed_data["num_node_metadata"], data = pop_bytes(data, 2)
@@ -369,11 +382,11 @@ class MapBlock:
 
         elif version >= 23:
             parsed_data["node_metadata_version"], data = pop_bytes(data, 1)
-            if struct.unpack(">B", parsed_data["node_metadata_version"])[0] == 0:
+            if struct.unpack(">B", parsed_data["node_metadata_version"])[0] == 0 and verbose:
                 print("INFO: node_metadata_version is 0, skipping node metadata")
-            elif version < 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 1:
+            elif version < 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 1 and verbose:
                 print("WARNING: node_metadata_version is not 1")
-            elif version >= 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 2:
+            elif version >= 28 and struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 2 and verbose:
                 print("WARNING: node_metadata_version is not 2")
 
             if struct.unpack(">B", parsed_data["node_metadata_version"])[0] != 0: 
@@ -405,7 +418,7 @@ class MapBlock:
 
                         if struct.unpack(">B", parsed_data["node_metadata_version"])[0] == 2:
                             var["is_private"], data = pop_bytes(data, 1)
-                            if struct.unpack(">B", var["is_private"])[0] != 0 and struct.unpack(">B", var["is_private"])[0] != 1:
+                            if struct.unpack(">B", var["is_private"])[0] != 0 and struct.unpack(">B", var["is_private"])[0] != 1 and verbose:
                                 print("WARNING: metadata's is_private is not 0 or 1, metadata may be corrupted")
 
                         var_s.append(var)
@@ -423,7 +436,7 @@ class MapBlock:
         # Static objects (node timers were moved to after this in map format version 25+)
 
         parsed_data["static_object_version"], data = pop_bytes(data, 1)
-        if struct.unpack(">B", parsed_data["static_object_version"])[0] != 0:
+        if struct.unpack(">B", parsed_data["static_object_version"])[0] != 0 and verbose:
             print("WARNING: static_object_version is not 0")
 
         parsed_data["static_object_count"], data = pop_bytes(data, 2)
@@ -457,7 +470,7 @@ class MapBlock:
             parsed_data["timestamp"], data = pop_bytes(data, 4)
 
             parsed_data["name_id_mapping_version"], data = pop_bytes(data, 1) # Should be 0
-            if struct.unpack(">B", parsed_data["name_id_mapping_version"])[0] != 0:
+            if struct.unpack(">B", parsed_data["name_id_mapping_version"])[0] != 0 and verbose:
                 print("WARNING: name_id_mapping_version is not 0")
 
             parsed_data["num_name_id_mappings"], data = pop_bytes(data, 2)
@@ -481,7 +494,7 @@ class MapBlock:
 
         if version >= 25:
             parsed_data["length_of_single_timer"], data = pop_bytes(data, 1) # Should be 10 (2+4+4)
-            if struct.unpack(">B", parsed_data["length_of_single_timer"])[0] != 10:
+            if struct.unpack(">B", parsed_data["length_of_single_timer"])[0] != 10 and verbose:
                 print("WARNING: length_of_single_timer is not 10")
 
             parsed_data["num_of_timers"], data = pop_bytes(data, 2)
@@ -931,7 +944,7 @@ class World:
 
         return mapblocks
 
-    def get_mapblock(self, pos):
+    def get_mapblock(self, pos, verbose=True):
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT data FROM blocks WHERE x=? AND y=? AND z=?",
@@ -939,7 +952,7 @@ class World:
         )
         row = cursor.fetchone()
         if row:
-            return MapBlock(pos, row[0])
+            return MapBlock(pos=pos, data=row[0], verbose=verbose)
         return None
 
     def set_mapblock(self, pos, mapblock):
