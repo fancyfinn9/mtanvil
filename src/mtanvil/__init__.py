@@ -249,14 +249,14 @@ class MapBlock:
         self.pos = pos
         self.raw = data
         self.data = self.parse(data, verbose=verbose) or {
-            "was_compressed": None,
+            "was_compressed": False,
             "version": 29, "flags": {"is_underground": False, "day_night_differs": True, "lighting_expired": True, "generated": False},
             "lighting_complete": {"nothing1": True, "nothing2": True, "nothing3": True, "nothing4": True,
                 "night": {"X-": False, "Y-": False, "Z-": False, "Z+": False, "Y+": False, "X+": False},
                 "day": {"X-": False, "Y-": False, "Z-": False, "Z+": False, "Y+": False, "X+": False}},
             "timestamp": 4294967295,
             "name_id_mapping_version": 0, "name_id_mappings": [],
-            "content_width": 2, "params_width": 2, "node_data": [], "nodes": [],
+            "content_width": 2, "params_width": 2, "node_data": [], "nodes": [Node() for _ in range(4096)],
             "node_metadata_version": 2, "node_metadata": [],
             "static_object_version": 0, "static_objects": [],
             "length_of_single_timer": 10, "timers": []
